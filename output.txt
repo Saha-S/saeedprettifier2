@@ -1,0 +1,11 @@
+Your flight itinerary:
+
+Departing from Los Angeles International Airport to Heathrow Airport
+Departure: 01 Nov 2025
+Arrival: 09:15PM (+01:00)
+
+Connecting flight from London to New York
+
+Departure: 10:00 (-05:00)
+
+Enjoy your trip!
