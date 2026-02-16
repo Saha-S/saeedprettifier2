@@ -1,52 +1,84 @@
-<style>
-.title { 
-  font-size: 2.5em; 
-  font-weight: bold; 
-  text-align: center; 
-  background: linear-gradient(90deg, #B18EFF, #E6FF00, #FFDB58); 
-  background-clip: text; 
-  -webkit-background-clip: text; 
-  color: transparent; 
-  animation: gradientFlow 5s infinite linear; 
-}
-@keyframes gradientFlow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
-.subtitle { 
-  text-align: center; 
-  color: #E6FF00; 
-  font-style: italic; 
-}
-</style>
+# Itinerary Prettifier
 
-<div class="title">✈ KOOD AIRLINES PRETTIFIER ✈</div>
-<div class="subtitle">Make your flight itineraries customer-friendly!</div>
+Itinerary Prettifier is a Go command-line utility that cleans and enriches raw trip itineraries. It normalizes whitespace, expands airport codes into readable names, and renders timestamp tokens into human-friendly strings by consulting an airport lookup CSV.
 
----
+## Features
 
-## 🚀 Features
-- Convert ISO dates `D(...)` → `DD MMM YYYY` (e.g., `01 Nov 2025`)
-- Convert times `T12(...)` → `09:30PM (-02:00)` or `T24(...)` → `21:30 (+02:00)`
-- Swap airport codes `#LAX` / `##EGLL` → airport **names** or `*#LHR` → **city names**
-- Trim vertical whitespace (`\v`, `\f`, `\r`) → single `\n`
-- Collapse multiple blank lines → **one blank line max**
-- Optional terminal highlights with `-color` 💜
-- Optional city display with `-city` 🏙️
-- Random travel inspiration with `-getlucky` 🎲
+- Converts control characters and collapses excessive blank lines.
+- Replaces IATA (`#ABC`) and ICAO (`##ABCD`) tokens with airport names from a lookup file.
+- Turns city-prefixed tokens (`*#ABC`, `*##ABCD`) into municipality names for quick reference.
+- Formats time tokens (`T12(...)`, `T24(...)`) with the correct offset and date tokens (`D(...)`) into `DD Mon YYYY`.
+- Leaves unknown airport codes untouched, making it safe to run on partially curated inputs.
 
----
+## Requirements
 
-## ⚡ Usage
+- Go 1.24.5 or later.
+- UTF-8 text input file containing the itinerary content.
+- CSV lookup file with airport metadata (see below for required columns).
+
+## Quick Start
+
 ```bash
-# Basic
+# Fetch dependencies (none beyond the Go standard library)
+go mod tidy
+
+# Format your input/lookup files and run the prettifier
 go run . ./input.txt ./output.txt ./airport-lookup.csv
+```
 
-# Show city names
-go run . ./input.txt ./output.txt ./airport-lookup.csv -city
+`input.txt` is the raw itinerary to prettify, `output.txt` is where the cleaned text is written, and `airport-lookup.csv` is the lookup table. The program prints short error messages on stderr when it cannot proceed (e.g., invalid argument count, missing files, malformed CSV).
 
-# Add KOOD violet highlights
-go run . ./input.txt ./output.txt ./airport-lookup.csv -color
+## Airport Lookup CSV
 
-# Both city + color
-go run . ./input.txt ./output.txt ./airport-lookup.csv -city -color
+The loader expects a header row containing at least the following columns:
 
-# Random travel inspiration
-go run . -getlucky
+- `name`
+- `iso_country`
+- `municipality`
+- `icao_code`
+- `iata_code`
+- `coordinates`
+
+Each row must populate those columns. During parsing the tool adds multiple lookup keys so that both `#IATA` and `##ICAO` tokens can resolve to the same airport.
+
+## Token Reference
+
+| Token | Meaning | Example Input | Output Example |
+| ----- | ------- | ------------- | -------------- |
+| `#ABC` | IATA airport code → airport name | `Depart #SEA` | `Depart Seattle-Tacoma International Airport` |
+| `##ABCD` | ICAO airport code → airport name | `Gate ##KSEA` | `Gate Seattle-Tacoma International Airport` |
+| `*#ABC` | City hint for IATA code | `Arrive *#LHR` | `Arrive London` |
+| `*##ABCD` | City hint for ICAO code | `Layover *##EGLL` | `Layover London` |
+| `T24(ISO timestamp)` | 24-hour clock with offset | `T24(2025-03-05T08:15:00-08:00)` | `08:15 (-08:00)` |
+| `T12(ISO timestamp)` | 12-hour clock with offset | `T12(2025-03-05T16:45:00+00:00)` | `04:45PM (+00:00)` |
+| `D(ISO date or datetime)` | Calendar date | `D(2025-03-05)` | `05 Mar 2025` |
+
+Tokens remain unchanged when their lookup fails or the timestamp/date cannot be parsed, so your source data stays intact.
+
+## Example
+
+```
+Input:
+Depart #SEA on D(2025-03-05) at T24(2025-03-05T08:15:00-08:00).
+Arrive *#LHR at T12(2025-03-05T16:45:00+00:00).
+
+Output:
+Depart Seattle-Tacoma International Airport on 05 Mar 2025 at 08:15 (-08:00).
+Arrive London at 04:45PM (+00:00).
+```
+
+Run the sample command above to process the provided `input.txt` and inspect `output.txt` for the transformed result.
+
+## Project Structure
+
+```
+.
+├── airports/     # CSV parsing and airport lookup services
+├── cli/          # Command-line argument parsing
+├── config/       # Configuration validation
+├── fileio/       # File reader/writer helpers
+├── formatter/    # Text prettification pipeline
+├── types/        # Shared data structures
+├── main.go       # Composition root wiring everything together
+└── go.mod        # Module definition
+```
